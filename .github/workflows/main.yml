@@ -14,3 +14,15 @@ jobs:
         run: |
           echo "$SPECIAL_KEY"
           echo "done"
+          export DEBIAN_FRONTEND=noninteractive && apt-get -y update && apt-get -y upgrade && apt-get -y install unzip curl openjdk-16-jre-headless git openjdk-13-jre-headless git ruby npm openssh-client && \
+          [ -x /usr/bin/gem2.7 ] && gem install bundler:2.2.15  && \
+          [ -x  /usr/share/npm/bin/npm-cli.js ] && npm install --global yarn && \
+          [ -x /usr/local/lib/node_modules/yarn/bin/yarn.js  ] && curl -L -o /tmp/dependency-check.zip https://github.com/jeremylong/DependencyCheck/releases/download/v6.1.6/dependency-check-6.1.6-release.zip && \ 
+          cd /tmp && mkdir -p ~/.ssh/ && chmod 700 ~/.ssh/ && \
+          unzip dependency-check.zip && \
+          git clone https://github.com/JetBrains/sample_rails_app.git && \
+          echo "cloned stuff" && \
+          cd /tmp/sample_rails_app && npm install && \
+          mkdir -p /tmp/depCheck && \
+          /tmp/dependency-check/bin/dependency-check.sh -s /tmp/sample_rails_app/ -f JSON --project "rails sample app" -o /tmp/depCheck --disableBundleAudit
+          echo "ALL DONE"
