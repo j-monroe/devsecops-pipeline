@@ -7,8 +7,7 @@ jobs:
     name: My Job
     runs-on: ubuntu-latest
     steps:
-      - name: cat special
-          uses: actions/checkout@v2
+      - uses: actions/checkout@v2
       - name: get_val
         env: 
           SPECIAL_KEY: ${{ secrets.FOURK_KEY2 }} 
