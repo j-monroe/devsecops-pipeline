@@ -7,9 +7,9 @@ jobs:
     name: My Job
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Decrypt large secret
-      - shell: bash     
+      - name: cat special
+          uses: actions/checkout@v2
+      - name: get_val
         env: 
           SPECIAL_KEY: ${{ secrets.FOURK_KEY2 }} 
         run: |
