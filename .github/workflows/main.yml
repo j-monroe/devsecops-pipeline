@@ -1,26 +1,109 @@
 name: Workflows with large secrets
 
-on: push
+on:
+  push:
+
+permissions:
+  contents: read
 
 jobs:
   my-job:
     name: My Job
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
-      - name: get_val
-        env: 
-          SPECIAL_KEY: ${{ secrets.FOURK_KEY2 }} 
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java (LTS)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node.js (LTS) + Yarn (via Corepack)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Enable Corepack (Yarn)
+        run: corepack enable
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: false
+
+      - name: Install system packages
         run: |
-          export DEBIAN_FRONTEND=noninteractive && sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y install unzip curl openjdk-16-jre-headless git openjdk-13-jre-headless git ruby npm openssh-client && \
-          [ -x /usr/bin/gem2.7 ] && sudo gem install bundler:2.2.15  && \
-          [ -x  /usr/share/npm/bin/npm-cli.js ] && sudo npm install --global yarn && \
-          [ -x /usr/local/lib/node_modules/yarn/bin/yarn.js  ] && curl -L -o /tmp/dependency-check.zip https://github.com/jeremylong/DependencyCheck/releases/download/v6.1.6/dependency-check-6.1.6-release.zip && \ 
-          cd /tmp && mkdir -p ~/.ssh/ && chmod 700 ~/.ssh/ && \
-          unzip dependency-check.zip && \
-          git clone https://github.com/JetBrains/sample_rails_app.git && \
-          echo "cloned stuff" && \
-          cd /tmp/sample_rails_app && npm install && \
-          mkdir -p /tmp/depCheck && \
-          /tmp/dependency-check/bin/dependency-check.sh -s /tmp/sample_rails_app/ -f JSON --project "rails sample app" -o /tmp/depCheck --disableBundleAudit
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            unzip curl git ca-certificates
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Install Bundler (latest compatible)
+        run: |
+          set -euo pipefail
+          gem --version
+          bundle --version || gem install bundler
+
+      - name: Get latest OWASP Dependency-Check
+        run: |
+          set -euo pipefail
+          latest_tag="$(curl -fsSL https://api.github.com/repos/jeremylong/DependencyCheck/releases/latest | \
+            ruby -rjson -e 'puts JSON.parse(STDIN.read).fetch("tag_name")')"
+
+          echo "Latest Dependency-Check: ${latest_tag}"
+
+          asset_url="$(curl -fsSL https://api.github.com/repos/jeremylong/DependencyCheck/releases/latest | \
+            ruby -rjson -e '
+              r = JSON.parse(STDIN.read)
+              a = r.fetch("assets").find { |x| x["name"] =~ /dependency-check-.*-release\.zip$/ }
+              puts a.fetch("browser_download_url")
+            ')"
+
+          curl -fsSL -o /tmp/dependency-check.zip "$asset_url"
+          rm -rf /tmp/dependency-check
+          mkdir -p /tmp/dependency-check
+          unzip -q /tmp/dependency-check.zip -d /tmp/dependency-check
+
+          # Normalize to a stable path regardless of versioned folder name
+          dc_dir="$(find /tmp/dependency-check -maxdepth 1 -type d -name 'dependency-check*' | head -n 1)"
+          echo "Dependency-Check directory: $dc_dir"
+          echo "DC_DIR=$dc_dir" >> "$GITHUB_ENV"
+
+      - name: Run Dependency-Check against sample Rails app
+        name: get_val
+        env:
+          SPECIAL_KEY: ${{ secrets.FOURK_KEY2 }}
+        run: |
+          set -euo pipefail
+
+          rm -rf /tmp/sample_rails_app
+          git clone --depth 1 https://github.com/JetBrains/sample_rails_app.git /tmp/sample_rails_app
+          echo "cloned stuff"
+
+          cd /tmp/sample_rails_app
+
+          # Node deps (choose npm or yarn; keeping npm like your original)
+          npm ci || npm install
+
+          mkdir -p /tmp/depCheck
+
+          "${DC_DIR}/bin/dependency-check.sh" \
+            -s /tmp/sample_rails_app/ \
+            -f JSON \
+            --project "rails sample app" \
+            -o /tmp/depCheck \
+            --disableBundleAudit
+
           echo "ALL DONE"
+
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: /tmp/depCheck
