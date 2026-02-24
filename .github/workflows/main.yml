@@ -12,8 +12,6 @@ jobs:
         env: 
           SPECIAL_KEY: ${{ secrets.FOURK_KEY2 }} 
         run: |
-          echo "$SPECIAL_KEY"
-          echo "done"
           export DEBIAN_FRONTEND=noninteractive && sudo apt-get -y update && sudo apt-get -y upgrade && sudo apt-get -y install unzip curl openjdk-16-jre-headless git openjdk-13-jre-headless git ruby npm openssh-client && \
           [ -x /usr/bin/gem2.7 ] && sudo gem install bundler:2.2.15  && \
           [ -x  /usr/share/npm/bin/npm-cli.js ] && sudo npm install --global yarn && \
